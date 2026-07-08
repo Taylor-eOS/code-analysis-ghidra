@@ -1,3 +1,5 @@
+from utils import find_function_boundaries
+
 SOURCE_FILE = "Rome.c"
 TRUNCATED_FILE = "Rome_truncated.c"
 BUCKETS = 100
@@ -10,22 +12,13 @@ def load_source():
 
 def analyze_functions():
     print("Analyzing functions")
-    lines = STATE["lines"]
-    total_lines = len(lines)
+    total_lines = len(STATE["lines"])
     if total_lines == 0:
         return
-    for i, line in enumerate(lines):
-        if not line or line[0].isspace():
-            continue
-        idx = line.find("FUN_")
-        if idx == -1 or "(" not in line or "=" in line or ";" in line:
-            continue
-        name_end = line.find("(", idx)
-        name = line[idx:name_end].strip()
-        if len(name) > 12:
-            bucket_idx = min(int((i / total_lines) * BUCKETS), BUCKETS - 1)
-            STATE["buckets"][bucket_idx] = True
-            STATE["renamed_lines"].append(i)
+    STATE["renamed_lines"] = find_function_boundaries(STATE["lines"])
+    for i in STATE["renamed_lines"]:
+        bucket_idx = min(int((i / total_lines) * BUCKETS), BUCKETS - 1)
+        STATE["buckets"][bucket_idx] = True
 
 def draw_visualization():
     bar = "["
