@@ -1,14 +1,15 @@
 SOURCE_FILE = "Rome.c"
 TRUNCATED_FILE = "Rome_truncated.c"
 BUCKETS = 100
-TRUNCATION_BUCKETS = 20
-STATE = {"lines": None, "buckets": [False] * BUCKETS, "truncation_buckets": [False] * TRUNCATION_BUCKETS}
+STATE = {"lines": None, "buckets": [False] * BUCKETS, "renamed_lines": []}
 
 def load_source():
+    print("Loading source")
     with open(SOURCE_FILE, "r") as f:
         STATE["lines"] = f.readlines()
 
 def analyze_functions():
+    print("Analyzing functions")
     lines = STATE["lines"]
     total_lines = len(lines)
     if total_lines == 0:
@@ -22,14 +23,9 @@ def analyze_functions():
         name_end = line.find("(", idx)
         name = line[idx:name_end].strip()
         if len(name) > 12:
-            bucket_idx = int((i / total_lines) * BUCKETS)
-            if bucket_idx >= BUCKETS:
-                bucket_idx = BUCKETS - 1
+            bucket_idx = min(int((i / total_lines) * BUCKETS), BUCKETS - 1)
             STATE["buckets"][bucket_idx] = True
-            trunc_idx = int((i / total_lines) * TRUNCATION_BUCKETS)
-            if trunc_idx >= TRUNCATION_BUCKETS:
-                trunc_idx = TRUNCATION_BUCKETS - 1
-            STATE["truncation_buckets"][trunc_idx] = True
+            STATE["renamed_lines"].append(i)
 
 def draw_visualization():
     bar = "["
@@ -60,21 +56,26 @@ def draw_visualization():
         label = "Renamed" if current_state else "Unmodified"
         print(f"Lines {start_line}-{total_lines}: {label}")
 
-def prompt_and_truncate():
+def truncate():
     total_lines = len(STATE["lines"])
     if total_lines == 0:
         return
     try:
-        choice = input(f"Create truncated file containing relevant segments ({TRUNCATION_BUCKETS})? (y/n): ")
-    except EOFError:
+        choice = input("For truncation enter number of parts to split in: ")
+        num_buckets = int(choice)
+    except (EOFError, ValueError):
         return
-    if choice.strip().lower() != 'y':
+    if num_buckets <= 0:
         return
+    truncation_buckets = [False] * num_buckets
+    for line_idx in STATE["renamed_lines"]:
+        trunc_idx = min(int((line_idx / total_lines) * num_buckets), num_buckets - 1)
+        truncation_buckets[trunc_idx] = True
     with open(TRUNCATED_FILE, "w") as f:
-        for d in range(TRUNCATION_BUCKETS):
-            if STATE["truncation_buckets"][d]:
-                start_line = int((d / TRUNCATION_BUCKETS) * total_lines)
-                end_line = int(((d + 1) / TRUNCATION_BUCKETS) * total_lines)
+        for d in range(num_buckets):
+            if truncation_buckets[d]:
+                start_line = int((d / num_buckets) * total_lines)
+                end_line = int(((d + 1) / num_buckets) * total_lines)
                 f.writelines(STATE["lines"][start_line:end_line])
     print(f"Truncated codebase written to {TRUNCATED_FILE}")
 
@@ -82,7 +83,7 @@ def main():
     load_source()
     analyze_functions()
     draw_visualization()
-    prompt_and_truncate()
+    truncate()
 
 if __name__ == "__main__":
     main()
