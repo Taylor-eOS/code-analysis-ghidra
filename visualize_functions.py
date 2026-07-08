@@ -3,6 +3,7 @@ from utils import find_function_boundaries
 SOURCE_FILE = "Rome.c"
 TRUNCATED_FILE = "Rome_truncated.c"
 BUCKETS = 100
+RENAMED_MIN_LEN = 12
 STATE = {"lines": None, "buckets": [False] * BUCKETS, "renamed_lines": []}
 
 def load_source():
@@ -15,8 +16,17 @@ def analyze_functions():
     total_lines = len(STATE["lines"])
     if total_lines == 0:
         return
-    STATE["renamed_lines"] = find_function_boundaries(STATE["lines"])
-    for i in STATE["renamed_lines"]:
+    boundaries = find_function_boundaries(STATE["lines"])
+    renamed_lines = []
+    for i in boundaries:
+        line = STATE["lines"][i]
+        idx = line.find("FUN_")
+        name_end = line.find("(", idx)
+        name = line[idx:name_end].strip()
+        if len(name) > RENAMED_MIN_LEN:
+            renamed_lines.append(i)
+    STATE["renamed_lines"] = renamed_lines
+    for i in renamed_lines:
         bucket_idx = min(int((i / total_lines) * BUCKETS), BUCKETS - 1)
         STATE["buckets"][bucket_idx] = True
 

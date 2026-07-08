@@ -1,5 +1,4 @@
 
-
 def find_function_boundaries(lines):
     boundaries = []
     for i, line in enumerate(lines):
@@ -10,6 +9,5 @@ def find_function_boundaries(lines):
             continue
         name_end = line.find("(", idx)
         name = line[idx:name_end].strip()
-        if len(name) > 12:
-            boundaries.append(i)
+        boundaries.append(i)
     return boundaries
