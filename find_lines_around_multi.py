@@ -6,11 +6,10 @@ STATE = {
     "file_lines": [],
     "matches": []
 }
-
-SEARCH_TERMS = ["0x2f8", "PTR_FUN"]
+SEARCH_TERMS = ["FUN_0127d300_postbattleresultsaggregation", "param_9"]
 INCLUDE_LINE_NUMBERS = False
-LINES_BEFORE = 8
-LINES_AFTER = 8
+SEARCH_WINDOW = 6
+LINES_AROUND = 100
 MERGE_OVERLAPPING = True
 
 def load_file():
@@ -19,14 +18,15 @@ def load_file():
 
 def execute_search():
     lines = STATE["file_lines"]
-    window = max(LINES_BEFORE, LINES_AFTER)
     raw_matches = []
     for i in range(len(lines)):
-        start = max(0, i - window)
-        end = min(len(lines), i + window + 1)
-        block = "".join(lines[start:end])
+        search_start = max(0, i - SEARCH_WINDOW)
+        search_end = min(len(lines), i + SEARCH_WINDOW + 1)
+        block = "".join(lines[search_start:search_end])
         if all(term in block for term in SEARCH_TERMS):
-            raw_matches.append((start, end))
+            print_start = max(0, i - LINES_AROUND)
+            print_end = min(len(lines), i + LINES_AROUND + 1)
+            raw_matches.append((print_start, print_end))
     if not MERGE_OVERLAPPING:
         STATE["matches"] = raw_matches
         return

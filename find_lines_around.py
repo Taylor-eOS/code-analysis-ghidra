@@ -6,10 +6,10 @@ STATE = {
     "line_numbers": [],
     "file_lines": []
 }
-SEARCH_TERMS = ["searchterm1", "searchterm2"]
+SEARCH_TERMS = ["  uVar1 = (**(code **)(*param_9 + 0x1c0))();"]
 INCLUDE_LINE_NUMBERS = False
 LINES_BEFORE = 120
-LINES_AFTER = 30
+LINES_AFTER = 120
 
 def load_file():
     with open(STATE["file_name"], "r", encoding="utf-8", errors="ignore") as f:
