@@ -1,7 +1,7 @@
 import os
 
-ROOT_DIR = "rome_functions"
-STATE = {"folders": [], "current_file": None, "current_lines": None, "functions": [], "function_map": {}}
+ROOT_DIR = "rome_functions_test"
+STATE = {"folders": [], "current_file": None, "current_lines": None, "functions": [], "function_map": {}, "caller_map": {}}
 C_KEYWORDS = {
     "if", "else", "while", "for", "do", "switch", "case", "default",
     "return", "sizeof", "goto", "break", "continue", "typedef",
@@ -196,17 +196,14 @@ def extract_function_identifiers(lines):
     return results
 
 def list_folders():
-    STATE["folders"] = sorted(
-        d for d in os.listdir(ROOT_DIR)
-        if os.path.isdir(os.path.join(ROOT_DIR, d))
-    )
+    STATE["folders"] = sorted(d for d in os.listdir(ROOT_DIR) if os.path.isdir(os.path.join(ROOT_DIR, d)))
 
 def list_files(folder):
     folder_path = os.path.join(ROOT_DIR, folder)
     return sorted(f for f in os.listdir(folder_path) if f.endswith(".c"))
 
-def load_file(folder, filename):
-    path = os.path.join(ROOT_DIR, folder, filename)
+def load_file(filename):
+    path = os.path.join(ROOT_DIR, filename[4:7], filename)
     with open(path, "r") as f:
         STATE["current_lines"] = f.readlines()
     STATE["current_file"] = path
@@ -226,22 +223,48 @@ def detect_functions():
         STATE["function_map"][definition["name"]] = entry
     return definitions
 
+def build_caller_map():
+    STATE["caller_map"] = {}
+    for name, entry in STATE["function_map"].items():
+        for callee in entry["calls"]:
+            STATE["caller_map"].setdefault(callee, set()).add(name)
+
+def index_all_functions():
+    list_folders()
+    for folder in STATE["folders"]:
+        for filename in list_files(folder):
+            load_file(filename)
+            detect_functions()
+    build_caller_map()
+
+def get_callees(name):
+    entry = STATE["function_map"].get(name)
+    if entry is None:
+        return []
+    seen = set()
+    result = []
+    for callee in entry["calls"]:
+        if callee not in seen:
+            seen.add(callee)
+            result.append(callee)
+    return result
+
+def get_callers(name):
+    return sorted(STATE["caller_map"].get(name, ()))
+
+def search_function_names(query, limit=50):
+    query = query.lower()
+    matches = []
+    for name in STATE["function_map"]:
+        if query in name.lower():
+            matches.append(name)
+            if len(matches) >= limit:
+                break
+    return sorted(matches)
+
 def main():
-    load_file("00a", "FUN_00a0a2c0.c")
-    definitions = detect_functions()
-    print(f"Opened {STATE['current_file']}")
-    if not definitions:
-        print("No function definitions found")
-        return
-    for entry in definitions:
-        #print(f"Detected signature line(s): {entry['signature']}")
-        print(f"Function name: {entry['name']}")
-        print(f"Argument count: {len(entry['args'])}")
-        for i, arg in enumerate(entry["args"]):
-            print(f"  arg {i}: {arg}")
-        print(f"Call count: {len(entry['calls'])}")
-        for name in entry["calls"]:
-            print(f"  calls: {name}")
+    index_all_functions()
+    print(f"Indexed {len(STATE['function_map'])} functions across {len(STATE['folders'])} folders")
 
 if __name__ == "__main__":
     main()
