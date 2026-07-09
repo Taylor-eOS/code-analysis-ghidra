@@ -3,7 +3,7 @@ import re
 
 STATE = {
     "file_name": "Rome.c",
-    "output_name": "early_exit_loop_hits.txt",
+    "output_dir": "early_exit_loops",
     "file_lines": [],
     "func_bounds": [],
     "hits": []
@@ -14,6 +14,8 @@ LOOP_RE = re.compile(r"\b(do\s*\{|while\s*\(|for\s*\()")
 ACCUM_RE = re.compile(r"(\w+)\s*=\s*\1\s*[+\-]")
 BREAK_RETURN_RE = re.compile(r"\b(break|return)\b")
 IF_BREAK_RETURN_RE = re.compile(r"if\s*\(([^)]*)\)\s*\{?\s*$")
+FLOAT_LITERAL_RE = re.compile(r"\b0\.\d+\b|\bDAT_0[0-9a-fA-F]+\b.*(?:float|\(float\))|\(float\)")
+FRACTIONAL_HEX_FLOAT_RE = re.compile(r"0x3[0-9a-fA-F]{7}\b")
 
 def load_file():
     with open(STATE["file_name"], "r", encoding="utf-8", errors="ignore") as f:
@@ -27,9 +29,6 @@ def find_function_bounds():
             starts.append(i)
     starts.append(len(lines))
     STATE["func_bounds"] = [(starts[i], starts[i + 1]) for i in range(len(starts) - 1)]
-
-FLOAT_LITERAL_RE = re.compile(r"\b0\.\d+\b|\bDAT_0[0-9a-fA-F]+\b.*(?:float|\(float\))|\(float\)")
-FRACTIONAL_HEX_FLOAT_RE = re.compile(r"0x3[0-9a-fA-F]{7}\b")
 
 def has_float_threshold(full_text):
     if FLOAT_LITERAL_RE.search(full_text):
@@ -80,11 +79,12 @@ def find_candidates():
     STATE["hits"] = hits
 
 def save_hits():
-    with open(STATE["output_name"], "w", encoding="utf-8") as f:
-        for start, end in STATE["hits"]:
-            f.write("```\n")
+    if not os.path.exists(STATE["output_dir"]):
+        os.makedirs(STATE["output_dir"])
+    for idx, (start, end) in enumerate(STATE["hits"], start=1):
+        file_path = os.path.join(STATE["output_dir"], f"hit_{idx}.c")
+        with open(file_path, "w", encoding="utf-8") as f:
             f.writelines(STATE["file_lines"][start:end])
-            f.write("```\n\n")
 
 if __name__ == "__main__":
     if not os.path.exists(STATE["file_name"]):

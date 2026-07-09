@@ -1,6 +1,6 @@
 import os
 
-ROOT_DIR = "rome_functions_test"
+ROOT_DIR = "rome_functions"
 STATE = {"folders": [], "current_file": None, "current_lines": None, "functions": [], "function_map": {}, "caller_map": {}}
 C_KEYWORDS = {
     "if", "else", "while", "for", "do", "switch", "case", "default",

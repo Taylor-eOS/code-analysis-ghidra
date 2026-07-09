@@ -3,18 +3,20 @@ import tkinter as tk
 import explore_functions
 from gguf_llm_library import ask_llm
 
-CANVAS_WIDTH = 1000
+CANVAS_WIDTH = 1400
 CANVAS_HEIGHT = 700
-DOT_RADIUS = 8
+DOT_RADIUS = 4
 CENTER_X = CANVAS_WIDTH // 2
 CENTER_Y = CANVAS_HEIGHT // 2
-CALLER_X = 150
-CALLEE_X = CANVAS_WIDTH - 150
 CENTER_COLOR = "#2b7a2b"
 CALLER_COLOR = "#4a9a4a"
 CALLEE_COLOR = "#4a9a4a"
+MORE_COLOR = "#bbbbbb"
 LINE_COLOR = "#999999"
-MAX_SUGGESTIONS = 20
+MAX_SUGGESTIONS = 22
+MAX_DEPTH = 5
+MAX_PER_COLUMN = 12
+COLUMN_GAP = (CANVAS_WIDTH // 2 - 40) // MAX_DEPTH
 
 VIEW = {"root": None, "name_entry": None, "suggest_list": None, "canvas": None,
         "status_var": None, "current_name": None, "dot_names": {}, "sorted_names": []}
@@ -29,7 +31,47 @@ def draw_dot(x, y, label, color, tag):
     canvas = VIEW["canvas"]
     canvas.create_oval(x - DOT_RADIUS, y - DOT_RADIUS, x + DOT_RADIUS, y + DOT_RADIUS,
                         fill=color, outline="black", tags=(tag,))
-    canvas.create_text(x, y + DOT_RADIUS + 10, text=label, font=("TkDefaultFont", 9), tags=(tag,))
+    canvas.create_text(x, y + DOT_RADIUS + 8, text=label, font=("TkDefaultFont", 7), tags=(tag,))
+
+def build_chain(name, direction, max_depth):
+    """Walk the call graph outward from `name` in one direction ('callers' or 'callees'),
+    up to max_depth hops. Returns a list of columns; each column is a dict:
+    {"names": [...capped names...], "truncated": int, "parent_of": {name: [parent names in prev column]}}
+    Duplicate names within a column are merged (kept once). Already-visited names
+    (anywhere in the chain so far) are not expanded further, to avoid cycles/recursion blowups.
+    """
+    get_next = explore_functions.get_callers if direction == "callers" else explore_functions.get_callees
+    columns = []
+    visited = {name}
+    frontier = [name]
+    for depth in range(max_depth):
+        next_names_ordered = []
+        seen_this_depth = set()
+        parent_of = {}
+        for parent in frontier:
+            try:
+                neighbors = get_next(parent) or []
+            except Exception:
+                neighbors = []
+            for n in neighbors:
+                if n not in seen_this_depth:
+                    seen_this_depth.add(n)
+                    next_names_ordered.append(n)
+                parent_of.setdefault(n, [])
+                if parent not in parent_of[n]:
+                    parent_of[n].append(parent)
+        if not next_names_ordered:
+            break
+        total = len(next_names_ordered)
+        shown = next_names_ordered[:MAX_PER_COLUMN]
+        truncated = total - len(shown)
+        columns.append({"names": shown, "truncated": truncated, "parent_of": parent_of})
+        new_frontier = [n for n in shown if n not in visited]
+        visited.update(shown)
+        if not new_frontier:
+            break
+        frontier = new_frontier
+    return columns
 
 def render_center(name):
     VIEW["canvas"].delete("all")
@@ -37,23 +79,67 @@ def render_center(name):
     VIEW["current_name"] = name
     draw_dot(CENTER_X, CENTER_Y, name, CENTER_COLOR, "center")
     VIEW["dot_names"]["center"] = name
-    callers = explore_functions.get_callers(name)
-    callees = explore_functions.get_callees(name)
-    for i, (x, y) in enumerate(layout_positions(len(callers), CALLER_X, CANVAS_HEIGHT)):
-        tag = f"caller{i}"
-        VIEW["canvas"].create_line(x, y, CENTER_X, CENTER_Y, fill=LINE_COLOR)
-        draw_dot(x, y, callers[i], CALLER_COLOR, tag)
-        VIEW["dot_names"][tag] = callers[i]
-    for i, (x, y) in enumerate(layout_positions(len(callees), CALLEE_X, CANVAS_HEIGHT)):
-        tag = f"callee{i}"
-        VIEW["canvas"].create_line(CENTER_X, CENTER_Y, x, y, fill=LINE_COLOR)
-        draw_dot(x, y, callees[i], CALLEE_COLOR, tag)
-        VIEW["dot_names"][tag] = callees[i]
+
+    caller_columns = build_chain(name, "callers", MAX_DEPTH)
+    callee_columns = build_chain(name, "callees", MAX_DEPTH)
+
+    _render_side(caller_columns, direction="callers")
+    _render_side(callee_columns, direction="callees")
+
     entry = explore_functions.STATE["function_map"].get(name)
+    n_callers = len(caller_columns[0]["names"]) if caller_columns else 0
+    n_callees = len(callee_columns[0]["names"]) if callee_columns else 0
     if entry is not None:
-        VIEW["status_var"].set(f"{name}  |  {len(callers)} callers, {len(callees)} callees  |  {entry['path']}")
+        VIEW["status_var"].set(
+            f"{name}  |  {n_callers} direct callers, {n_callees} direct callees  |  "
+            f"chain depth {len(caller_columns)} back / {len(callee_columns)} forward  |  {entry['path']}")
     else:
         VIEW["status_var"].set(f"{name}  |  not found in index")
+
+def _render_side(columns, direction):
+    """Draw one side (callers = left, callees = right) of the chain.
+    columns[0] is one hop away from center, columns[1] is two hops away, etc.
+    Each node's position is tracked so lines can connect it to its parent(s)
+    in the previous column (or to center, for column 0).
+    """
+    canvas = VIEW["canvas"]
+    color = CALLER_COLOR if direction == "callers" else CALLEE_COLOR
+    sign = -1 if direction == "callers" else 1
+
+    # positions[col_index][name] = (x, y), where col_index -1 means the center node
+    positions = {-1: {None: (CENTER_X, CENTER_Y)}}
+
+    for col_index, col in enumerate(columns):
+        x = CENTER_X + sign * COLUMN_GAP * (col_index + 1)
+        names = col["names"]
+        truncated = col["truncated"]
+        slots = len(names) + (1 if truncated else 0)
+        coords = layout_positions(slots, x, CANVAS_HEIGHT)
+        positions[col_index] = {}
+
+        prev_positions = positions[col_index - 1]
+        for i, node_name in enumerate(names):
+            nx, ny = coords[i]
+            positions[col_index][node_name] = (nx, ny)
+            parents = col["parent_of"].get(node_name, [])
+            if col_index == 0:
+                px, py = prev_positions[None]
+                canvas.create_line(px, py, nx, ny, fill=LINE_COLOR)
+            else:
+                for parent in parents:
+                    if parent in prev_positions:
+                        px, py = prev_positions[parent]
+                        canvas.create_line(px, py, nx, ny, fill=LINE_COLOR)
+            tag = f"{direction}{col_index}_{i}"
+            draw_dot(nx, ny, node_name, color, tag)
+            VIEW["dot_names"][tag] = node_name
+
+        if truncated:
+            mx, my = coords[-1]
+            tag = f"{direction}{col_index}_more"
+            label = f"+{truncated} more..."
+            canvas.create_text(mx, my, text=label, font=("TkDefaultFont", 7), fill=MORE_COLOR, tags=(tag,))
+            # not clickable / not added to dot_names since it isn't a real function name
 
 def copy_name_to_clipboard(name):
     VIEW["root"].clipboard_clear()
@@ -90,7 +176,7 @@ def summarize_current_file():
         return
     VIEW["status_var"].set(f"Asking LLM to summarize {entry['path']}...")
     VIEW["root"].update_idletasks()
-    prompt = f"{code}\n\nSummarize what broad category of tasks this function appears to have. All functions are in a strategy game source code; try to distinguish what this one is doing. Don't prepend your answer with surrounding qualifiers, just describe the function task outright. Write your response as one single unformatted sentence."
+    prompt = f"{code}\n\nInstruction: Describe the functions specific role in the games internal logic by identifying what unique operation it performs compared to other functions. Focus on the concrete behavior visible in the code. Summarize this as one plain sentence that states the functions distinct purpose rather than a generic category. All functions are from the Rome Total War source code, that does not have to be mentioned. Do not invent specifics that you can't know. Write your response as one single unformatted sentence."
     try:
         summary = ask_llm(prompt, 3)
     except Exception as exc:
@@ -101,7 +187,8 @@ def summarize_current_file():
 
 def on_canvas_click(event):
     canvas = VIEW["canvas"]
-    items = canvas.find_overlapping(event.x - DOT_RADIUS, event.y - DOT_RADIUS, event.x + DOT_RADIUS, event.y + DOT_RADIUS)
+    hit_radius = DOT_RADIUS + 4
+    items = canvas.find_overlapping(event.x - hit_radius, event.y - hit_radius, event.x + hit_radius, event.y + hit_radius)
     for item in items:
         tags = canvas.gettags(item)
         for tag in tags:
