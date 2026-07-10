@@ -65,18 +65,25 @@ def match_definition_before_brace(clean, brace_pos):
     if k < 0 or clean[k] != ")":
         return None
     close_paren = k
-    line_start = clean.rfind("\n", 0, close_paren) + 1
-    if line_start >= close_paren or clean[line_start].isspace():
-        return None
-    paren_pos = matching_paren_open(clean, close_paren, line_start)
+    paren_pos = matching_paren_open(clean, close_paren, 0)
     if paren_pos is None:
         return None
-    name_match = None
-    for match in IDENT_RE.finditer(clean, line_start, paren_pos):
-        name_match = match
-    if name_match is None or name_match.end() != paren_pos:
+    k = paren_pos - 1
+    while k >= 0 and clean[k].isspace():
+        k -= 1
+    if k < 0:
         return None
-    return (name_match.group(0), line_start)
+    ident_end = k + 1
+    ident_start = ident_end
+    while ident_start > 0 and (clean[ident_start - 1].isalnum() or clean[ident_start - 1] == "_"):
+        ident_start -= 1
+    if ident_start == ident_end:
+        return None
+    if not (clean[ident_start].isalpha() or clean[ident_start] == "_"):
+        return None
+    decl_start = clean.rfind("\n", 0, ident_start) + 1
+    name = clean[ident_start:ident_end]
+    return (name, decl_start)
 
 def matching_paren_open(clean, close_paren_pos, lower_bound):
     depth = 0
@@ -98,6 +105,7 @@ def is_column_zero_brace(clean, pos):
     return k < 0 or clean[k] == "\n"
 
 def find_functions(text):
+    print("Finding functions")
     clean = strip_comments_and_strings(text)
     n = len(clean)
     functions = []

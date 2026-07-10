@@ -10,12 +10,14 @@ STATE = {
 }
 
 def load_file():
+    print("Loading files")
     if len(sys.argv) > 1:
         STATE["file_name"] = sys.argv[1]
     with open(STATE["file_name"], "r", encoding="utf-8", errors="ignore") as f:
         STATE["lines"] = f.readlines()
 
 def parse_functions():
+    print("Parsing functions")
     func_prefixes = ("void FUN_", "int FUN_", "long FUN_", "undefined", "ulong FUN_", "char FUN_", "double FUN_", "float FUN_", "short FUN_")
     start_idx = -1
     for i, line in enumerate(STATE["lines"]):
@@ -27,6 +29,7 @@ def parse_functions():
         STATE["functions"].append((start_idx, len(STATE["lines"])))
 
 def analyze_functions():
+    print("Analyzing functions")
     for start, end in STATE["functions"]:
         body_lines = STATE["lines"][start:end]
         has_loop = False
@@ -59,6 +62,7 @@ def check_detailed_heuristics(start, end, body_lines):
         STATE["candidates"].append((start, end))
 
 def save_candidates():
+    print("Saving candidates")
     if not os.path.exists(STATE["output_dir"]):
         os.makedirs(STATE["output_dir"])
     for idx, (start, end) in enumerate(STATE["candidates"], start=1):
@@ -67,12 +71,8 @@ def save_candidates():
             f.writelines(STATE["lines"][start:end])
 
 if __name__ == "__main__":
-    print("Loading files")
     load_file()
-    print("Parsing functions")
     parse_functions()
-    print("Analyzing functions")
     analyze_functions()
-    print("Saving candidates")
     save_candidates()
     print("Done")

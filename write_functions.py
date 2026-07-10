@@ -1,8 +1,10 @@
+from utils import find_functions
+
 SOURCE_FILE = "Rome.c"
 LIST_FILE = "list.txt"
 OUTPUT_FILE = "extracted_functions.txt"
 
-STATE = {"names": None, "lines": None, "starts": None}
+STATE = {"names": None, "text": None, "spans": None}
 
 def load_names():
     with open(LIST_FILE, "r") as f:
@@ -10,48 +12,26 @@ def load_names():
 
 def load_source():
     with open(SOURCE_FILE, "r") as f:
-        STATE["lines"] = f.readlines()
+        STATE["text"] = f.read()
 
-def index_starts():
-    starts = {}
-    for i, line in enumerate(STATE["lines"]):
-        idx = line.find("FUN_")
-        if idx == -1 or "(" not in line:
-            continue
-        paren_idx = line.find("(", idx)
-        name = line[idx:paren_idx]
-        if name in STATE["names"] and name not in starts:
-            starts[name] = i
-    STATE["starts"] = starts
-
-def find_block_end(start_idx):
-    lines = STATE["lines"]
-    n = len(lines)
-    i = start_idx
-    while i < n and not lines[i].startswith("{"):
-        i += 1
-    if i >= n:
-        return None
-    while i < n:
-        if lines[i].startswith("}"):
-            return i
-        i += 1
-    return None
+def index_spans():
+    spans = {}
+    for decl_start, close, name in find_functions(STATE["text"]):
+        if name in STATE["names"] and name not in spans:
+            spans[name] = (decl_start, close)
+    STATE["spans"] = spans
 
 def write_output():
-    starts = STATE["starts"]
-    lines = STATE["lines"]
-    missing = STATE["names"] - set(starts.keys())
+    spans = STATE["spans"]
+    text = STATE["text"]
+    missing = STATE["names"] - set(spans.keys())
     written = 0
     with open(OUTPUT_FILE, "w") as f:
         for name in STATE["names"]:
-            if name not in starts:
+            if name not in spans:
                 continue
-            end_idx = find_block_end(starts[name])
-            if end_idx is None:
-                missing.add(name)
-                continue
-            f.writelines(lines[starts[name]:end_idx + 1])
+            decl_start, close = spans[name]
+            f.write(text[decl_start:close + 1])
             f.write("\n\n")
             written += 1
     if missing:
@@ -63,9 +43,8 @@ def write_output():
 def main():
     load_names()
     load_source()
-    index_starts()
+    index_spans()
     write_output()
 
 if __name__ == "__main__":
     main()
-

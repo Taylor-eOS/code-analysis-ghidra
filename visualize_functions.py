@@ -7,6 +7,7 @@ RENAMED_MIN_LEN = 12
 STATE = {"text": None, "lines": None, "line_offsets": None, "buckets": [False] * BUCKETS, "renamed_lines": []}
 
 def load_source():
+    print("Loading source")
     with open(SOURCE_FILE, "r") as f:
         STATE["text"] = f.read()
     STATE["lines"] = STATE["text"].splitlines(keepends=True)
@@ -30,6 +31,7 @@ def offset_to_line(offset):
     return lo
 
 def analyze_functions():
+    print("Analyzing functions")
     total_lines = len(STATE["lines"])
     if total_lines == 0:
         return
@@ -44,6 +46,7 @@ def analyze_functions():
         STATE["buckets"][bucket_idx] = True
 
 def draw_visualization():
+    print("Drawing visualization")
     bar = "["
     for bucket in STATE["buckets"]:
         if bucket:
@@ -73,6 +76,7 @@ def draw_visualization():
         print(f"Lines {start_line}-{total_lines}: {label}")
 
 def truncate():
+    print("Truncating")
     total_lines = len(STATE["lines"])
     if total_lines == 0:
         return
@@ -96,12 +100,8 @@ def truncate():
     print(f"Truncated codebase written to {TRUNCATED_FILE}")
 
 if __name__ == "__main__":
-    print("Loading source")
     load_source()
-    print("Analyzing functions")
     analyze_functions()
-    print("Drawing visualization")
     draw_visualization()
-    print("Truncating")
     truncate()
     print("Done")
