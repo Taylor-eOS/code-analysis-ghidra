@@ -3,7 +3,6 @@ from utils import find_functions
 SOURCE_FILE = "Rome.c"
 LIST_FILE = "list.txt"
 OUTPUT_FILE = "extracted_functions.txt"
-
 STATE = {"names": None, "text": None, "spans": None}
 
 def load_names():
@@ -24,7 +23,6 @@ def index_spans():
     STATE["spans"] = spans
 
 def write_output():
-    print("Writing output")
     spans = STATE["spans"]
     text = STATE["text"]
     missing = STATE["names"] - set(spans.keys())
@@ -38,9 +36,10 @@ def write_output():
             f.write("\n\n")
             written += 1
     if missing:
-        print("Missing functions not found in source:")
+        print(f"Missing functions not found in {SOURCE_FILE}:")
         for name in sorted(missing):
             print(name)
+        print(f"List basenames with no folder or ending.")
     print(f"Wrote {written} functions to {OUTPUT_FILE}")
 
 def main():
