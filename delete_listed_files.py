@@ -2,7 +2,7 @@ import os
 import sys
 
 STATE = {
-    "list_path": "short_functions.txt",
+    "list_path": "list.txt",
     "base_dir": "rome_functions_cut"
 }
 
